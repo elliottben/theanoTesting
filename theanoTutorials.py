@@ -4,6 +4,7 @@ import theano.tensor as T
 from theano import function
 from theano import In
 from theano import shared
+from theano.tensor.shared_randomstreams import RandomStreams
 
 #init variables for pretty printing
 counter = 0
@@ -60,6 +61,18 @@ def seven():
     #the value fo the shared variable post the function call updates to 110
     print x7.get_value()
 
+def eight():
+    #two inputs from uniform dist, two of the same prints from normal dist, almost zero
+    #demonstrating how to generate random numbers
+    incCounter()
+    print f8_1()
+    print f8_1()
+    print "\n"
+    print f8_2()
+    print f8_2()
+    print "\n"
+    print f8_3()
+
 #0
 x0 = T.dscalar('x0')
 y0 = T.dscalar('y0')
@@ -97,9 +110,19 @@ f6 = function([y6, z6], a6, givens=[(x6, z6)])
 #7--copying function f5
 x7 = shared(100)
 f7 = f5.copy(swap={x5:x7})
+#8
+x8 = RandomStreams(seed=234)
+y8 = x8.uniform((2, 2))
+z8 = x8.normal((2, 2))
+f8_1 = function([], y8)
+f8_2 = function([], z8, no_default_updates=True) #not updating z8.rng
+f8_3 = function([], y8 + y8 - 2*y8)
+#9--seeding random streams
+
 
 if __name__ =="__main__":
     zeroThroughFour()
     five()
     six()
     seven()
+    eight()
