@@ -60,6 +60,7 @@ def seven():
     print f7(10)
     #the value fo the shared variable post the function call updates to 110
     print x7.get_value()
+    print "\n"
 
 def eight():
     #two inputs from uniform dist, two of the same prints from normal dist, almost zero
@@ -72,7 +73,13 @@ def eight():
     print f8_2()
     print "\n"
     print f8_3()
+    print "\n"
 
+def nine():
+    #look at #9
+    incCounter()
+    #complete #9 sample
+    print "\n"
 #0
 x0 = T.dscalar('x0')
 y0 = T.dscalar('y0')
@@ -118,7 +125,12 @@ f8_1 = function([], y8)
 f8_2 = function([], z8, no_default_updates=True) #not updating z8.rng
 f8_3 = function([], y8 + y8 - 2*y8)
 #9--seeding random streams
-
+x9 = RandomStreams(seed=234)
+y9 = x9.uniform((2, 2))
+z9 = y9.rng.get_value(borrow=True)
+z9.seed(12345)
+y9.rng.set_value(z9, borrow=True)
+#can also seed all seeds with (RandomStream).seed((int))--this will init each distribution with a different seed
 
 if __name__ =="__main__":
     zeroThroughFour()
@@ -126,3 +138,4 @@ if __name__ =="__main__":
     six()
     seven()
     eight()
+    nine()
