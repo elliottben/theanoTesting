@@ -7,12 +7,16 @@ from theano import shared
 
 #init variables for pretty printing
 counter = 0
-def println(theanoFunc, inputs):
+
+def incCounter():
     global counter
     print str(counter) + ":"
+    counter = counter + 1
+
+def println(theanoFunc, inputs):
+    incCounter()
     print theanoFunc(*inputs)
     print "\n"
-    counter = counter + 1
 
 def zeroThroughFour():
     println(f0, [2, 3])
@@ -24,7 +28,7 @@ def zeroThroughFour():
 def five():
     #0 0 1 2 -1
     #variables that are shared can have states and using updates
-    print str(counter) + ":"
+    incCounter()
     print x5.get_value()
     #now increment the value, note that returned is the value of x5 as specified in function
     print f5(1)
@@ -41,13 +45,20 @@ def six():
     #7 0
     #using the givens parameter to replace a node in a graph for a specific function
     #this allows you to use a function for a certain value of the used shared value (in the function) without changing the value of the shared variable
-    print str(counter) + ":"
+    incCounter()
     #using 3 for the value of x6
-    print b6(1, 3)
+    print f6(1, 3)
     #the value fo x6 has been kept at its original 0
     print x6.get_value()
     print "\n"
 
+def seven():
+    #100 110
+    incCounter()
+    #returned is 100 as the shared variable is 100
+    print f7(10)
+    #the value fo the shared variable post the function call updates to 110
+    print x7.get_value()
 
 #0
 x0 = T.dscalar('x0')
@@ -82,9 +93,13 @@ x6 = shared(0)
 y6 = T.iscalar('y6')
 z6 = T.scalar(dtype=x6.dtype)
 a6 = x6 * 2 + y6
-b6 = function([y6, z6], a6, givens=[(x6, z6)])
+f6 = function([y6, z6], a6, givens=[(x6, z6)])
+#7--copying function f5
+x7 = shared(100)
+f7 = f5.copy(swap={x5:x7})
 
 if __name__ =="__main__":
     zeroThroughFour()
     five()
     six()
+    seven()
