@@ -1,9 +1,7 @@
 #figuring out theano
 import numpy
 import theano.tensor as T
-from theano import function
-from theano import In
-from theano import shared
+from theano import function, In, shared, pp, scan
 from theano.tensor.shared_randomstreams import RandomStreams
 from theano.sandbox.rng_mrg import MRG_RandomStreams 
 
@@ -11,6 +9,7 @@ from theano.sandbox.rng_mrg import MRG_RandomStreams
 counter = 0
 
 def incCounter():
+    print "\n"
     global counter
     print str(counter) + ":"
     counter = counter + 1
@@ -41,7 +40,6 @@ def five():
     #this value can be reset with the set_value() function
     x5.set_value(-1)
     print x5.get_value()
-    print "\n"
 
 def six():
     #7 0
@@ -52,7 +50,6 @@ def six():
     print f6(1, 3)
     #the value fo x6 has been kept at its original 0
     print x6.get_value()
-    print "\n"
 
 def seven():
     #100 110
@@ -61,7 +58,6 @@ def seven():
     print f7(10)
     #the value fo the shared variable post the function call updates to 110
     print x7.get_value()
-    print "\n"
 
 def eight():
     #two inputs from uniform dist, two of the same prints from normal dist, almost zero
@@ -74,7 +70,6 @@ def eight():
     print f8_2()
     print "\n"
     print f8_3()
-    print "\n"
 
 def nine():
     #note that one and two are not the same as three and four because of the seed change mid producing the distributions
@@ -86,7 +81,6 @@ def nine():
     print f9_3()
     print "\n"
     print f9_4()
-    print "\n"
 
 def ten():
     #the first two are different but the last two are the same
@@ -111,7 +105,24 @@ def ten():
     print f10_3()
     print "\n"
     print f10_4()
-    print "\n"
+
+def eleven():
+    #taking a derivative
+    incCounter()
+    print f11(4)
+
+def twelve():
+    #taking more complex derivative
+    incCounter()
+    print f12([[1, 0], [-1, -2]])
+
+def thirteenThrough():
+    #compute the jacobian
+    incCounter()
+    print f13([4, 4])
+    incCounter()
+    print f14([4,4])
+
 #0
 x0 = T.dscalar('x0')
 y0 = T.dscalar('y0')
@@ -169,6 +180,31 @@ f9_3 = function([], b9)
 f9_4 = function([], c9)
 #10--setting two random number generators equal to each other to produce the same random variables
 #ten needed to be included in the function to change the rstate and updates after the first print showing incongruence
+#11--working on derivatives in theano
+x11 = T.dscalar('x11')
+y11 = x11 ** 2
+gy11 = T.grad(y11, x11) #derivative of y11 wrt x11
+f11 = function([x11], gy11)
+#12--specific derivative of the logistic function
+x12 = T.dmatrix('x12')
+y12 = T.sum(1/(1 + T.exp(-x12)))
+gy12 = T.grad(y12, x12)
+f12 = function([x12], gy12)
+#13--in order to take the jacobian (derivative of matrix wrt matrix) then we need to use scan
+#or use theano.gradient.jacobian()
+x13 = T.dvector('x13')
+y13 = x13 ** 2
+#loop through each vector of the matrix and compute the gradient wrt the vector x
+z13, a13 = scan(lambda i13, y13, x13 : T.grad(y13[i13], x13), sequences=T.arange(y13.shape[0]), non_sequences=[y13, x13])
+f13 = function([x13], z13, updates = a13)
+#14--computing the hessian manually
+#or use theano.gradient.hessian()
+x14 = T.dvector('x14')
+y14 = x14 ** 2
+z14 = y14.sum()
+gy14 = T.grad(z14, x14)
+a14, b14 = scan(lambda i14, gy14, x14 :  T.grad(gy14[i14], x14), sequences=T.arange(gy14.shape[0]), non_sequences=[gy14, x14])
+f14 = function([x14], a14, updates=b14)
 
 
 if __name__ =="__main__":
@@ -179,3 +215,6 @@ if __name__ =="__main__":
     eight()
     nine()
     ten()
+    eleven()
+    twelve()
+    thirteenThrough()
