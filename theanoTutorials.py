@@ -5,6 +5,7 @@ from theano import function
 from theano import In
 from theano import shared
 from theano.tensor.shared_randomstreams import RandomStreams
+from theano.sandbox.rng_mrg import MRG_RandomStreams 
 
 #init variables for pretty printing
 counter = 0
@@ -76,9 +77,40 @@ def eight():
     print "\n"
 
 def nine():
-    #look at #9
+    #note that one and two are not the same as three and four because of the seed change mid producing the distributions
     incCounter()
-    #complete #9 sample
+    print f9_1()
+    print "\n"
+    print f9_2()
+    print "\n"
+    print f9_3()
+    print "\n"
+    print f9_4()
+    print "\n"
+
+def ten():
+    #the first two are different but the last two are the same
+    x10 = MRG_RandomStreams(123)
+    y10 = MRG_RandomStreams(235)
+    z10 = x10.uniform((2, 2))
+    a10 = y10.uniform((2, 2))
+    f10_1 = function([], z10)
+    f10_2 = function([], a10)
+    incCounter()
+    print f10_1()
+    print "\n"
+    print f10_2()
+    x10.rstate = y10.rstate
+    for (x10_1, y10_1) in zip(x10.state_updates, y10.state_updates):
+        x10_1[0].set_value(y10_1[0].get_value())
+    b10 = x10.uniform((2, 2))
+    c10 = y10.uniform((2, 2))
+    f10_3 = function([], b10)
+    f10_4 = function([], c10)
+    print "\n"
+    print f10_3()
+    print "\n"
+    print f10_4()
     print "\n"
 #0
 x0 = T.dscalar('x0')
@@ -127,10 +159,17 @@ f8_3 = function([], y8 + y8 - 2*y8)
 #9--seeding random streams
 x9 = RandomStreams(seed=234)
 y9 = x9.uniform((2, 2))
-z9 = y9.rng.get_value(borrow=True)
-z9.seed(12345)
-y9.rng.set_value(z9, borrow=True)
-#can also seed all seeds with (RandomStream).seed((int))--this will init each distribution with a different seed
+z9 = x9.uniform((2, 2))
+f9_1 = function([], y9)
+f9_2 = function([], z9)
+x9.seed(9000)
+b9 = x9.uniform((2, 2))
+c9 = x9.uniform((2, 2))
+f9_3 = function([], b9)
+f9_4 = function([], c9)
+#10--setting two random number generators equal to each other to produce the same random variables
+#ten needed to be included in the function to change the rstate and updates after the first print showing incongruence
+
 
 if __name__ =="__main__":
     zeroThroughFour()
@@ -139,3 +178,4 @@ if __name__ =="__main__":
     seven()
     eight()
     nine()
+    ten()
