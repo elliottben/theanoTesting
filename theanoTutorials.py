@@ -4,6 +4,7 @@ import theano.tensor as T
 from theano import function, In, shared, pp, scan
 from theano.tensor.shared_randomstreams import RandomStreams
 from theano.sandbox.rng_mrg import MRG_RandomStreams 
+import theano
 
 #init variables for pretty printing
 counter = 0
@@ -122,6 +123,15 @@ def thirteenThrough():
     print f13([4, 4])
     incCounter()
     print f14([4,4])
+    incCounter()
+    print f15_1([[1, 2], [1, 3]], [1, 1], [0, 1])
+    #note that the jacobian then times v should be the same thing
+    print f15_2([[1, 2], [1, 3]], [1, 1], [0, 1])
+    #now trying with the lop
+    print f15_3([[1, 2], [1, 3]], [0,1])
+    print f15_4([[1, 2], [1, 3]], [1, 1], [0, 1])
+    #lop and rop can be extended to the hessian by passing in the jacobian or gradient as the first variable of the lop or rop 
+
 
 #0
 x0 = T.dscalar('x0')
@@ -205,6 +215,27 @@ z14 = y14.sum()
 gy14 = T.grad(z14, x14)
 a14, b14 = scan(lambda i14, gy14, x14 :  T.grad(gy14[i14], x14), sequences=T.arange(gy14.shape[0]), non_sequences=[gy14, x14])
 f14 = function([x14], a14, updates=b14)
+#15--using the R operator to multiply the jacobian by a vector, can also be used for matrix times vector
+w15 = T.dmatrix('w15')
+x15 = T.dvector('x15')
+v15 = T.dvector('v15')
+y15 = T.dot(w15, x15)
+Jv15_1 = T.Rop(y15, x15, v15)
+#this rop means jacobian of y15 wrt x15 then * v15
+#note that this operator only needs a dot product between a vector and a matrix, the vector can come out of the jacobian if need be
+f15_1 = function([w15, x15, v15], Jv15_1)
+a15 = theano.gradient.jacobian(T.dot(w15, x15), x15)
+f15_2 = function([w15, x15, v15], T.dot(a15, v15))
+#now extend this with the L operator
+Jv15_2 = T.Lop(y15, x15, v15)
+#interestingly the L operator does not need the input x15
+f15_3 = function([w15, v15], Jv15_2)
+f15_4 = function([w15, x15, v15], T.dot(v15, a15))
+
+
+
+
+
 
 
 if __name__ =="__main__":
