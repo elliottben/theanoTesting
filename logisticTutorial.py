@@ -11,7 +11,7 @@ N = 400
 #number of features
 feats = 784
 #my random numbers
-rng = np.random
+rng = np.random()
 #generate dataset
 D = (rng.randn(N, feats), rng.randint(size=N, low=0, high = 2))
 training_steps = 10000
