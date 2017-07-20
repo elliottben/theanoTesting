@@ -45,14 +45,21 @@ class Activation:
     """
     class to define all the activation functions that can be used
     """
-    def sigmoid(self, neuron_type):
+    def logistic_function(self, neuron_type):
         """
         neuron_type = the type of neuron, currently is just linear \n
         """
-        sigmoid = T.dmatrix("sigmoid")
-        sigmoid = 1/(1+ T.exp(-(neuron_type)))
-        return sigmoid
+        logistic_function = T.dmatrix("logistic_function")
+        logistic_function = 1/(1+ T.exp(-(neuron_type)))
+        return logistic_function
 
+    def inverse_tangent_function(self, neuron_type):
+        """
+        neuron_type = the type of neuron, currently is just linear \n
+        """
+        inverse_tangent_function = T.dmatrix("inverse_tangent_function")
+        inverse_tangent_function = 1.7159*T.tanh((1.5)*(neuron_type))
+        return inverse_tangent_function
 
 class Loss:
     """
@@ -135,7 +142,7 @@ class Neural_network:
             else:
                 self.func = self.neuron.linear(self.func, [self.batch_size], self.dimensions, layer, w, b, self.precision)
             #add the activation to the function
-            self.func = self.activation.sigmoid(self.func)
+            self.func = self.activation.inverse_tangent_function(self.func)
         return self.func
 
     def logistic_loss_update(self, y):
@@ -143,12 +150,12 @@ class Neural_network:
         cost = Cost(loss.logistic_loss(y, self.func), self.w_list, self.b_list)
         return cost.update_parameters(self.learning_rate)
 
-    def print_function_graph(self, file):
-        theano.printing.pydotprint(self.func, outfile=file, var_with_name_simple=True)
+    def print_function_graph(self, file, function):
+        theano.printing.pydotprint(function, outfile=file, var_with_name_simple=True)
 
 class Help:
     """
-    class you can instantiate if you need help!
+    class you can instantiate if you need help!\n
     """
     def example_neural_network(self):
         """
@@ -163,14 +170,14 @@ class Help:
         x = T.dmatrix("x")
         y = T.dmatrix("y")
         #specify the dimensions of each of the weight matrices
-        dimensions = [[2, 10], [10, 5], [5, 1]]
+        dimensions = [[2, 1]]
         #declare the nn with (learning_rate, dimensions, accuracy)
-        network = Neural_network(0.1, 3, dimensions, 'float64')
+        network = Neural_network(0.01, 3, dimensions, 'float64')
         #print the network framework out to a file
-        network.print_function_graph("pydotprint.png")
         my_func = function([x, y], network.fully_connected_network(x), updates = network.logistic_loss_update(y))
+        network.print_function_graph("pydotprint.png", function([x], network.fully_connected_network(x)))
         #train the function
-        for i in xrange(1000):
+        for i in xrange(500):
             my_func([[0.1, 0.3], [0.3, 0.2], [0.4, 0.5]], [[0.5], [0.1], [0.4]])
         #print results
         print my_func([[0.1, 0.3], [0.3, 0.2], [0.4, 0.5]], [[0.5], [0.1], [0.4]])
