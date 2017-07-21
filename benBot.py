@@ -61,6 +61,12 @@ class Activation:
         inverse_tangent_function = 1.7159*T.tanh((1.5)*(neuron_type))
         return inverse_tangent_function
 
+    def linear_function(self, neuron_type):
+        return neuron_type
+
+    def relu_function(self, neuron_type):
+        return T.nnet.relu(neuron_type)
+
 class Loss:
     """
     least_squared: This is the least squared cost function \n
@@ -122,7 +128,6 @@ class Neural_network:
         #necessary elements
         self.neuron = Neuron()
         self.activation = Activation()
-        self.activation = Activation()
         self.w_list = []
         self.b_list = []
         #overall building function
@@ -170,15 +175,15 @@ class Help:
         x = T.dmatrix("x")
         y = T.dmatrix("y")
         #specify the dimensions of each of the weight matrices
-        dimensions = [[2, 1]]
+        dimensions = [[2, 10], [10, 10], [10, 1]]
         #declare the nn with (learning_rate, dimensions, accuracy)
         network = Neural_network(0.01, 3, dimensions, 'float64')
         #print the network framework out to a file
         my_func = function([x, y], network.fully_connected_network(x), updates = network.logistic_loss_update(y))
         network.print_function_graph("pydotprint.png", function([x], network.fully_connected_network(x)))
         #train the function
-        for i in xrange(500):
-            my_func([[0.1, 0.3], [0.3, 0.2], [0.4, 0.5]], [[0.5], [0.1], [0.4]])
+        for i in xrange(1000):
+            print my_func([[0.1, 0.3], [0.3, 0.2], [0.4, 0.5]], [[0.5], [0.1], [0.4]])
         #print results
         print my_func([[0.1, 0.3], [0.3, 0.2], [0.4, 0.5]], [[0.5], [0.1], [0.4]])
         
