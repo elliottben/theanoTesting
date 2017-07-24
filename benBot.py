@@ -50,7 +50,7 @@ class Activation:
         neuron_type = the type of neuron, currently is just linear \n
         """
         logistic_function = T.dmatrix("logistic_function")
-        logistic_function = 1/(1+ T.exp(-(neuron_type)))
+        logistic_function = 1./(1.+ T.exp(-(neuron_type)))
         return logistic_function
 
     def inverse_tangent_function(self, neuron_type):
@@ -58,7 +58,7 @@ class Activation:
         neuron_type = the type of neuron, currently is just linear \n
         """
         inverse_tangent_function = T.dmatrix("inverse_tangent_function")
-        inverse_tangent_function = 1.7159*T.tanh((1.5)*(neuron_type))
+        inverse_tangent_function = 1.7159 * T.tanh(1.5 * (neuron_type))
         return inverse_tangent_function
 
     def linear_function(self, neuron_type):
@@ -72,10 +72,15 @@ class Loss:
     least_squared: This is the least squared cost function \n
     logistic_loss: Implementation of logistic loss funciton \n
     """
+
     def logistic_loss(self, y, y_hat):
         logistic_loss = T.dmatrix("logistic_loss")
-        logistic_loss = -y * T.log(y_hat) - (1-y) * T.log(1-y_hat)
+        logistic_loss = -y * T.log(y_hat) - (1.0-y) * T.log(1.0-y_hat)
         return logistic_loss
+
+    def least_squared_loss(self, y, y_hat):
+        least_squared_loss = T.sum(0.5*((y-y_hat)**2))
+        return least_squared_loss
 
 
 class Cost:
@@ -132,6 +137,22 @@ class Neural_network:
         self.b_list = []
         #overall building function
         self.func = T.dmatrix("pre-compiled_function")
+        #internals
+        self.loss = Loss()
+
+    def printWeights(self):
+        print "\nWeights:"
+        print "length: " + str(len(self.w_list))
+        for item in self.w_list:
+            print "\nlayer" + str(item) + "\n"
+            print item.get_value() 
+
+    def printBiases(self):
+        print "\nBiases:"
+        print "length: " + str(len(self.b_list))
+        for item in self.b_list:
+            print "\nlayer" + str(item) + "\n"
+            print item.get_value()
 
     def fully_connected_network(self, x):
         for layer in xrange(len(self.dimensions)):
@@ -151,9 +172,15 @@ class Neural_network:
         return self.func
 
     def logistic_loss_update(self, y):
-        loss = Loss()
-        cost = Cost(loss.logistic_loss(y, self.func), self.w_list, self.b_list)
+        cost = Cost(self.loss.logistic_loss(y, self.func), self.w_list, self.b_list)
         return cost.update_parameters(self.learning_rate)
+
+    def least_squared_loss_update(self, y):
+        cost = Cost(self.loss.least_squared_loss(y, self.func), self.w_list, self.b_list)
+        return cost.update_parameters(self.learning_rate)
+
+    def printLoss(self, y, y_hat):
+        return self.loss.least_squared_loss(y, y_hat)
 
     def print_function_graph(self, file, function):
         theano.printing.pydotprint(function, outfile=file, var_with_name_simple=True)
@@ -174,18 +201,28 @@ class Help:
         #first declare the input matrix parameters in theano
         x = T.dmatrix("x")
         y = T.dmatrix("y")
+        x_in = [[0.1, 0.3], [0.3, 0.2], [0.4, 0.5]]
+        y_out = [[0.5], [-0.1], [0.4]]
         #specify the dimensions of each of the weight matrices
-        dimensions = [[2, 10], [10, 10], [10, 1]]
+        dimensions = [[2, 5], [5, 1]]
         #declare the nn with (learning_rate, dimensions, accuracy)
         network = Neural_network(0.01, 3, dimensions, 'float64')
         #print the network framework out to a file
-        my_func = function([x, y], network.fully_connected_network(x), updates = network.logistic_loss_update(y))
-        network.print_function_graph("pydotprint.png", function([x], network.fully_connected_network(x)))
+        fully_connected = network.fully_connected_network(x)
+        my_func = function([x, y], fully_connected, updates = network.least_squared_loss_update(y))
+        loss_my_func = function([x, y], T.mean(network.printLoss(y, fully_connected)))
         #train the function
-        for i in xrange(1000):
-            print my_func([[0.1, 0.3], [0.3, 0.2], [0.4, 0.5]], [[0.5], [0.1], [0.4]])
-        #print results
-        print my_func([[0.1, 0.3], [0.3, 0.2], [0.4, 0.5]], [[0.5], [0.1], [0.4]])
+        network.printWeights()
+        network.printBiases()
+        print "\nresult:\n"
+        print my_func(x_in, y_out)
+        for i in xrange(500):
+            my_func(x_in, y_out)
+            print loss_my_func(x_in, y_out)
+        network.printWeights()
+        network.printBiases()
+        print "\nresult:\n"
+        print my_func(x_in, y_out)
         
 class mean_pooling:
     """
