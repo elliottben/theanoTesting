@@ -45,6 +45,14 @@ class Activation:
     """
     class to define all the activation functions that can be used
     """
+    def __init__(self):
+        self.options = {
+            "logistic_function" : self.logistic_function,
+            "inverse_tangent_function" : self.inverse_tangent_function,
+            "linear_function" : self.linear_function,
+            "relu_function" : self.relu_function
+        }
+    
     def logistic_function(self, neuron_type):
         """
         neuron_type = the type of neuron, currently is just linear \n
@@ -69,19 +77,24 @@ class Activation:
 
 class Loss:
     """
-    least_squared: This is the least squared cost function \n
+    least_squared_loss: This is the least squared cost function \n
     logistic_loss: Implementation of logistic loss funciton \n
     """
 
+    def __init__(self):
+        self.options = {
+            "logistic_loss":self.logistic_loss,
+            "least_squared_loss":self.least_squared_loss
+        }
+        self.loss_function = T.dmatrix("loss_function")
+
     def logistic_loss(self, y, y_hat):
-        logistic_loss = T.dmatrix("logistic_loss")
-        logistic_loss = -y * T.log(y_hat) - (1.0-y) * T.log(1.0-y_hat)
-        return logistic_loss
+        self.loss_function = -y * T.log(y_hat) - (1.0-y) * T.log(1.0-y_hat)
+        return self.loss_function
 
     def least_squared_loss(self, y, y_hat):
-        least_squared_loss = T.sum(0.5*((y-y_hat)**2))
-        return least_squared_loss
-
+        self.loss_function = T.sum(0.5*((y-y_hat)**2))
+        return self.loss_function
 
 class Cost:
     """
@@ -130,6 +143,7 @@ class Neural_network:
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.dimensions = dimensions
+        self.loss = Loss()
         #necessary elements
         self.neuron = Neuron()
         self.activation = Activation()
@@ -137,8 +151,6 @@ class Neural_network:
         self.b_list = []
         #overall building function
         self.func = T.dmatrix("pre-compiled_function")
-        #internals
-        self.loss = Loss()
 
     def printWeights(self):
         print "\nWeights:"
@@ -154,7 +166,7 @@ class Neural_network:
             print "\nlayer" + str(item) + "\n"
             print item.get_value()
 
-    def fully_connected_network(self, x):
+    def fully_connected_network(self, x, activation_type="inverse_tangent_function"):
         for layer in xrange(len(self.dimensions)):
             w_name = "w" + str(layer)
             b_name = "b" + str(layer)
@@ -168,19 +180,16 @@ class Neural_network:
             else:
                 self.func = self.neuron.linear(self.func, [self.batch_size], self.dimensions, layer, w, b, self.precision)
             #add the activation to the function
-            self.func = self.activation.inverse_tangent_function(self.func)
+            self.func = self.activation.options[activation_type](self.func)
         return self.func
 
-    def logistic_loss_update(self, y):
-        cost = Cost(self.loss.logistic_loss(y, self.func), self.w_list, self.b_list)
+    def update_loss(self, y, type="least_squared_loss"):
+        cost = Cost(self.loss.options[type](y, self.func), self.w_list, self.b_list)
         return cost.update_parameters(self.learning_rate)
 
-    def least_squared_loss_update(self, y):
-        cost = Cost(self.loss.least_squared_loss(y, self.func), self.w_list, self.b_list)
-        return cost.update_parameters(self.learning_rate)
-
-    def printLoss(self, y, y_hat):
-        return self.loss.least_squared_loss(y, y_hat)
+    def print_loss(self, x, y, x_in, y_in, type="least_squared_loss"):
+        loss = function([x, y], T.mean(self.loss.options[type](y, self.func)))
+        print loss(x_in, y_in)
 
     def print_function_graph(self, file, function):
         theano.printing.pydotprint(function, outfile=file, var_with_name_simple=True)
@@ -208,9 +217,7 @@ class Help:
         #declare the nn with (learning_rate, dimensions, accuracy)
         network = Neural_network(0.01, 3, dimensions, 'float64')
         #print the network framework out to a file
-        fully_connected = network.fully_connected_network(x)
-        my_func = function([x, y], fully_connected, updates = network.least_squared_loss_update(y))
-        loss_my_func = function([x, y], T.mean(network.printLoss(y, fully_connected)))
+        my_func = function([x, y], network.fully_connected_network(x), updates = network.update_loss(y, "least_squared_loss"))
         #train the function
         network.printWeights()
         network.printBiases()
@@ -218,7 +225,7 @@ class Help:
         print my_func(x_in, y_out)
         for i in xrange(500):
             my_func(x_in, y_out)
-            print loss_my_func(x_in, y_out)
+            network.print_loss(x, y, x_in, y_out)
         network.printWeights()
         network.printBiases()
         print "\nresult:\n"
