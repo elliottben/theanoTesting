@@ -2,6 +2,7 @@
 import theano
 from theano import tensor as T, function, shared, scan
 import numpy as np
+import collections
 
 x = T.dmatrix('x')
 func = function([x], x.sum()/(x.flatten().shape[0]))
@@ -33,15 +34,32 @@ r = T.dmatrix("r")
 function_1 = function([r], T.dot(bb, r))
 print function_1([[5],[6],[8]])
 
-shared_matrix_1 = theano.shared((np.array([2, 3, 4])).astype('float64'))
-shared_matrix_2 = theano.shared((np.array([2, 3, 4])).astype('float64'))
-shared_total = theano.shared(np.array([shared_matrix_1, shared_matrix_2]).astype('float64'))
-print shared_total.get_value()
-shared_arr = T.dvector("shared_arr")
-my_arr = [shared_matrix_1, shared_matrix_2]
-results, updates = theano.scan(fn=lambda prior_result, my_arr:prior_result+shared_arr,
-                                outputs_info=(np.array([2, 3, 4])).astype('float64'),
-                                non_sequences=None,
-                                sequences=shared_total)
-output_function = function([], results, updates=updates)
-print output_function()
+a_real = [[1.0, 2.0, 3.0]]
+b_real = [[4.0, 5.0, 6.0]]
+c_real = [[7.0, 8.0, 9.0]]
+a_np = np.array(a_real)
+b_np = np.array(b_real)
+c_np = np.array(c_real)
+a_theano = T.dmatrix("a_theano")
+b_theano = T.dmatrix("b_theano")
+c_theano = T.dmatrix("c_theano")
+result = function([a_theano, b_theano, c_theano], T.concatenate([a_theano, b_theano, c_theano], axis=0))
+my_sequence = [a_real, b_real, c_real]
+print result(*my_sequence)
+result_1 = function([], T.concatenate(my_sequence, axis=1))
+print result_1()
+
+input_1 = [9]
+input_2 = [8]
+print input_1 + input_2
+
+updates = collections.OrderedDict()
+update_1 = collections.OrderedDict()
+update_2 = collections.OrderedDict()
+update_1["key1"] = "key1"
+update_2['key2'] = "key2"
+updates.update(update_1)
+updates.update(update_2)
+print update_1
+print update_2
+print updates

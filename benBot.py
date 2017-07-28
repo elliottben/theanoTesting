@@ -39,7 +39,35 @@ class Neuron:
         linear = linear_1 + b
         return linear
 
+    def lstm(self, x, h_t_1, c_t_1, w, u, b, vector_dimensions, precision):
+        """
+        a unit returning a time step output. The following is an explanation
 
+        input information is added to cell information based on the previous time step of that cell to produce the new cell state.  
+        This is designed around the idea that the cell "chooses" to make a decision based off 
+        previous information and "state" or current information and "state"
+
+        the ouput is then computed "typically" with the activation output of a normal linear unit being multiplied by the
+        tanh of the produced state for the cell
+        """
+        activation = Activation()
+        #forget, input, output, and C in between values
+        fioC_t = []
+        c_t = T.dmatrix("c_t")
+        h_t = T.dmatrix("h_t")
+        lower = -np.sqrt(1./(vector_dimensions))
+        higher = np.sqrt(1./(vector_dimensions))
+        for w_i, u_i, b_i in zip(w, u, b):
+            w_np = np.random.uniform(lower, higher, np.array([vector_dimensions, vector_dimensions])).astype(precision)
+            w_i.set_value(w_np)
+            u_np = np.random.uniform(lower, higher, np.array([vector_dimensions, vector_dimensions])).astype(precision)
+            u_i.set_value(u_np)
+            b_np = np.random.uniform(lower, higher, np.array([1, vector_dimensions])).astype(precision)
+            b_i.set_value(b_np)
+            fioC_t.append(activation.options["logistic_function"](T.dot(x, w_i) + T.dot(h_t_1, u_i) + b_i))
+        c_t = fioC_t[0]*c_t_1 + fioC_t[1]*fioC_t[2]
+        h_t = fioC_t[3]*c_t
+        return h_t, c_t
 
 class Activation:
     """
@@ -100,7 +128,7 @@ class Cost:
     """
     cost function is composed of the loss function as well as regularization that can be added
     """
-    def __init__(self, loss, w_list, b_list):
+    def __init__(self, loss, w_list, b_list, u_list, h_t_1):
         """
         init the cost function with a loss function
         """
@@ -108,11 +136,14 @@ class Cost:
         self.cost = loss
         self.w_list = w_list
         self.b_list = b_list
+        #the following is for lstm
+        self.u_list = u_list
+        self.h_t_1 = h_t_1
 
     def current(self):
         return self.cost
 
-    def update_parameters(self, learning_rate):
+    def update_parameters(self, learning_rate, final_layer):
         """
         update the shared parameters \n
         w = a list of the weights starting from the foremost layers \n
@@ -120,10 +151,17 @@ class Cost:
         learning_rate = the rate at which the program learns (can be function) \n
         """
         updates = collections.OrderedDict()
-        for w_i, b_i in zip(self.w_list, self.b_list):
-            gw_i, gb_i = T.grad(T.mean(self.loss), [w_i, b_i])
-            updates[w_i] = (w_i - learning_rate*gw_i)
-            updates[b_i] = (b_i - learning_rate*gb_i)
+        if (final_layer=="neural_network"):
+            for w_i, b_i in zip(self.w_list, self.b_list):
+                gw_i, gb_i = T.grad(T.mean(self.loss), [w_i, b_i])
+                updates[w_i] = (w_i - learning_rate*gw_i)
+                updates[b_i] = (b_i - learning_rate*gb_i)
+        elif(final_layer=="lstm_chain"):
+            for w_i, b_i, u_i, h_t_1_i in zip(self.w_list, self.b_list, self.u_list, self.h_t_1):
+                gw_i, gu_i, gb_i = T.grad(T.mean(h_t_1_i), [w_i, u_i, b_i])
+                updates[w_i] = (w_i - learning_rate*gw_i)
+                updates[b_i] = (b_i - learning_rate*gb_i)
+                updates[u_i] = (u_i - learning_rate*gu_i)
         return updates
 
 
@@ -136,19 +174,21 @@ class Neural_network:
     learning_rate = the rate at which the model takes steps down the cost function \n
     cost_function = the cost function of the network \n
     """
-    def __init__(self, learning_rate, batch_size, dimensions, precision):
+    def __init__(self, learning_rate, precision):
         #configure theano variables
         self.precision = precision
         #configure basic parameter variables
         self.learning_rate = learning_rate
-        self.batch_size = batch_size
-        self.dimensions = dimensions
         self.loss = Loss()
         #necessary elements
         self.neuron = Neuron()
         self.activation = Activation()
         self.w_list = []
+        self.u_list = []
         self.b_list = []
+        self.h_t_1_list = []
+        self.lstm_func_inputs_x = []
+        self.lstm_func_inputs_y = []
         #overall building function
         self.func = T.dmatrix("pre-compiled_function")
 
@@ -166,7 +206,9 @@ class Neural_network:
             print "\nlayer" + str(item) + "\n"
             print item.get_value()
 
-    def fully_connected_network(self, x, activation_type="inverse_tangent_function"):
+    def fully_connected_network(self, x, batch_size, dimensions, activation_type="inverse_tangent_function"):
+        self.batch_size = batch_size
+        self.dimensions = dimensions
         for layer in xrange(len(self.dimensions)):
             w_name = "w" + str(layer)
             b_name = "b" + str(layer)
@@ -183,9 +225,56 @@ class Neural_network:
             self.func = self.activation.options[activation_type](self.func)
         return self.func
 
-    def update_loss(self, y, type="least_squared_loss"):
-        cost = Cost(self.loss.options[type](y, self.func), self.w_list, self.b_list)
-        return cost.update_parameters(self.learning_rate)
+    def lstm_chain(self, vector_dimensions, chain_length, precision):
+        #create outputs that are the same dimensions as x
+        self.vector_dimensions = vector_dimensions
+        prev_h = np.zeros([1, self.vector_dimensions])
+        prev_C = np.zeros([1, self.vector_dimensions])
+        for link in xrange(chain_length):
+            #each neuron gets one input and one output
+            x = T.dvector("x" + str(link))
+            #store symbolic variables
+            self.lstm_func_inputs_x.append(x)
+            #each lst neuron has four w, u, b
+            link_w = []
+            link_u = []
+            link_b = []
+            for i in xrange(4):
+                w_name = "w" + str(link) + str(i)
+                u_name = "u" + str(link) + str(i)
+                b_name = "b" + str(link) + str(i)
+                link_w.append(theano.shared(np.array([[]]).astype(self.precision), name=w_name))
+                link_u.append(theano.shared(np.array([[]]).astype(self.precision), name=u_name))
+                link_b.append(theano.shared(np.array([[]]).astype(self.precision), name=b_name))
+                self.w_list.append(link_w[i])
+                self.u_list.append(link_u[i])
+                self.b_list.append(link_b[i])
+            prev_h, prev_C = self.neuron.lstm(x, prev_h, prev_C, link_w, link_u, link_b, self.vector_dimensions, precision)
+            self.h_t_1_list.append(prev_h)
+        #create the output theano variables
+        for link in xrange(chain_length):
+            y = T.dvector("y" + str(link))
+            self.lstm_func_inputs_y.append(y)
+        #return every time step output concatenated
+        self.func = T.concatenate(self.h_t_1_list, axis=1)
+        return self.func
+
+    def lstm_chain_parallel_output(self, x_in, y_out, loss_type="least_squared_loss"):
+        #input x and y correctly
+        #compile the updates
+        updates = self.update_loss(T.concatenate(self.lstm_func_inputs_y, axis=0))
+        lstm_output = function((self.lstm_func_inputs_x + self.lstm_func_inputs_y), self.func, updates=updates)
+        return lstm_output(*(x_in + y_out))
+
+
+
+    def update_loss(self, y, type="least_squared_loss", final_layer="neural_network"):
+        cost = Cost(self.loss.options[type](y, self.func), self.w_list, self.b_list, self.u_list, self.h_t_1_list)
+        return cost.update_parameters(self.learning_rate, final_layer)
+            
+    def print_loss_lstm(self, x_in, y_out, type="least_squared_loss"):
+        loss = function((self.lstm_func_inputs_x + self.lstm_func_inputs_y), T.mean(self.loss.options[type](T.concatenate(self.lstm_func_inputs_y, axis=0), self.func)))
+        print loss(*(x_in + y_out))
 
     def print_loss(self, x, y, x_in, y_in, type="least_squared_loss"):
         loss = function([x, y], T.mean(self.loss.options[type](y, self.func)))
@@ -215,9 +304,9 @@ class Help:
         #specify the dimensions of each of the weight matrices
         dimensions = [[2, 5], [5, 1]]
         #declare the nn with (learning_rate, dimensions, accuracy)
-        network = Neural_network(0.01, 3, dimensions, 'float64')
+        network = Neural_network(0.01, 'float64')
         #print the network framework out to a file
-        my_func = function([x, y], network.fully_connected_network(x), updates = network.update_loss(y, "least_squared_loss"))
+        my_func = function([x, y], network.fully_connected_network(x, 3, dimensions), updates = network.update_loss(y, network.func, "least_squared_loss", "neural_network"))
         #train the function
         network.printWeights()
         network.printBiases()
@@ -244,4 +333,18 @@ class Albert:
 
 if __name__ == "__main__":
     help = Help()
-    help.example_neural_network()
+    #help.example_neural_network()
+    #create all the inputs
+    x = T.dmatrix("x")
+    y = T.dmatrix("y")
+    x_in = [[0.1, 0.3], [0.6, 0.6]]
+    y_out = [[0.2, 0.5], [0.1, 0.1]]
+
+    network = Neural_network(1.0, 'float64')
+    my_lstm_chain = network.lstm_chain(2, len(x_in), 'float64')
+    network.print_function_graph("pydotprint.png", my_lstm_chain)
+    print network.lstm_chain_parallel_output(x_in, y_out)
+    for i in xrange(500):
+        network.lstm_chain_parallel_output(x_in, y_out)
+        network.print_loss_lstm(x_in, y_out)
+    print network.lstm_chain_parallel_output(x_in, y_out)
