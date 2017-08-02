@@ -187,10 +187,12 @@ class Neural_network:
         self.u_list = []
         self.b_list = []
         self.h_t_1_list = []
-        self.lstm_func_inputs_x = []
-        self.lstm_func_inputs_y = []
+        self.func_inputs_x = []
+        self.func_inputs_y = []
+        self.func_inputs_y_compiled = None
         #overall building function
         self.func = T.dmatrix("pre-compiled_function")
+        self.func_compiled = None
 
     def printWeights(self):
         print "\nWeights:"
@@ -206,9 +208,26 @@ class Neural_network:
             print "\nlayer" + str(item) + "\n"
             print item.get_value()
 
-    def fully_connected_network(self, x, batch_size, dimensions, activation_type="inverse_tangent_function"):
+    def fully_connected_network(self, batch_size, dimensions, x=None, activation_type="inverse_tangent_function"):
+
+        #configure the class variables for the neural network
+
+        #create the symbolic x and y
+        x_input = T.dmatrix("x_input")
+        if (x is None):
+            x = x_input
+        y = T.dmatrix("y")
+        #define the x and y inputs for theano
+        self.func_inputs_x.append(x)
+        self.func_inputs_y = [y]
+        #define the compiled y input for the loss function
+        self.func_inputs_y_compiled = y
+        #set the other parameters for the algorithm
         self.batch_size = batch_size
         self.dimensions = dimensions
+
+        #begin to code the layers of the network
+
         for layer in xrange(len(self.dimensions)):
             w_name = "w" + str(layer)
             b_name = "b" + str(layer)
@@ -234,7 +253,7 @@ class Neural_network:
             #each neuron gets one input and one output
             x = T.dvector("x" + str(link))
             #store symbolic variables
-            self.lstm_func_inputs_x.append(x)
+            self.func_inputs_x.append(x)
             #each lst neuron has four w, u, b
             link_w = []
             link_u = []
@@ -254,7 +273,7 @@ class Neural_network:
         #create the output theano variables
         for link in xrange(chain_length):
             y = T.dvector("y" + str(link))
-            self.lstm_func_inputs_y.append(y)
+            self.func_inputs_y.append(y)
         #return every time step output concatenated
         self.func = T.concatenate(self.h_t_1_list, axis=1)
         return self.func
@@ -262,22 +281,26 @@ class Neural_network:
     def lstm_chain_parallel_output(self, x_in, y_out, loss_type="least_squared_loss"):
         #input x and y correctly
         #compile the updates
-        updates = self.update_loss(T.concatenate(self.lstm_func_inputs_y, axis=0))
-        lstm_output = function((self.lstm_func_inputs_x + self.lstm_func_inputs_y), self.func, updates=updates)
+        updates = self.update_loss(T.concatenate(self.func_inputs_y, axis=0))
+        lstm_output = function((self.func_inputs_x + self.func_inputs_y), self.func, updates=updates)
         return lstm_output(*(x_in + y_out))
 
+    def return_compiled_func(self, type="least_squared_loss", final_layer="neural_network"):
+        updates = self.update_loss(self.func_inputs_y_compiled, type, final_layer)
+        self.func_compiled = function((self.func_inputs_x + self.func_inputs_y), self.func, updates=updates)
+        return self.func_compiled
 
 
     def update_loss(self, y, type="least_squared_loss", final_layer="neural_network"):
-        cost = Cost(self.loss.options[type](y, self.func), self.w_list, self.b_list, self.u_list, self.h_t_1_list)
+        cost = Cost(self.loss.options[type](self.func_inputs_y_compiled, self.func), self.w_list, self.b_list, self.u_list, self.h_t_1_list)
         return cost.update_parameters(self.learning_rate, final_layer)
             
     def print_loss_lstm(self, x_in, y_out, type="least_squared_loss"):
-        loss = function((self.lstm_func_inputs_x + self.lstm_func_inputs_y), T.mean(self.loss.options[type](T.concatenate(self.lstm_func_inputs_y, axis=0), self.func)))
+        loss = function((self.func_inputs_x + self.func_inputs_y), T.mean(self.loss.options[type](T.concatenate(self.func_inputs_y, axis=0), self.func)))
         print loss(*(x_in + y_out))
 
-    def print_loss(self, x, y, x_in, y_in, type="least_squared_loss"):
-        loss = function([x, y], T.mean(self.loss.options[type](y, self.func)))
+    def print_loss(self, x_in, y_in, type="least_squared_loss"):
+        loss = function((self.func_inputs_x + self.func_inputs_y), T.mean(self.loss.options[type](self.func_inputs_y_compiled, self.func)))
         print loss(x_in, y_in)
 
     def print_function_graph(self, file, function):
@@ -296,17 +319,17 @@ class Help:
             [0.4, 0.5, 0.4]
         ]
         """
-        #first declare the input matrix parameters in theano
-        x = T.dmatrix("x")
-        y = T.dmatrix("y")
+        #first declare the data to go in the function
         x_in = [[0.1, 0.3], [0.3, 0.2], [0.4, 0.5]]
         y_out = [[0.5], [-0.1], [0.4]]
         #specify the dimensions of each of the weight matrices
         dimensions = [[2, 5], [5, 1]]
         #declare the nn with (learning_rate, dimensions, accuracy)
         network = Neural_network(0.01, 'float64')
+        #create the fully connected layer
+        network.fully_connected_network(3, dimensions)
         #print the network framework out to a file
-        my_func = function([x, y], network.fully_connected_network(x, 3, dimensions), updates = network.update_loss(y, "least_squared_loss", "neural_network"))
+        my_func = network.return_compiled_func()
         #train the function
         network.printWeights()
         network.printBiases()
@@ -314,7 +337,7 @@ class Help:
         print my_func(x_in, y_out)
         for i in xrange(500):
             my_func(x_in, y_out)
-            network.print_loss(x, y, x_in, y_out)
+            network.print_loss(x_in, y_out)
         network.printWeights()
         network.printBiases()
         print "\nresult:\n"
@@ -352,7 +375,7 @@ class Albert:
 if __name__ == "__main__":
     help = Help()
     help.example_neural_network()
-    help.example_lstm_network()
+    #help.example_lstm_network()
     #create all the inputs
     """
     x = T.dmatrix("x")
