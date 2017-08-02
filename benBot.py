@@ -306,7 +306,7 @@ class Help:
         #declare the nn with (learning_rate, dimensions, accuracy)
         network = Neural_network(0.01, 'float64')
         #print the network framework out to a file
-        my_func = function([x, y], network.fully_connected_network(x, 3, dimensions), updates = network.update_loss(y, network.func, "least_squared_loss", "neural_network"))
+        my_func = function([x, y], network.fully_connected_network(x, 3, dimensions), updates = network.update_loss(y, "least_squared_loss", "neural_network"))
         #train the function
         network.printWeights()
         network.printBiases()
@@ -319,6 +319,24 @@ class Help:
         network.printBiases()
         print "\nresult:\n"
         print my_func(x_in, y_out)
+
+    def example_lstm_network(self):
+        #first define the variables and the data
+        x = T.dmatrix("x")
+        y = T.dmatrix("y")
+        x_in = [[0.1, 0.3], [0.6, 0.6]]
+        y_out = [[0.2, 0.5], [0.1, 0.1]]
+        #print the network function
+        network = Neural_network(1.0, 'float64')
+        my_lstm_chain = network.lstm_chain(2, len(x_in), 'float64')
+        #print the function graph
+        network.print_function_graph("pydotprint.png", my_lstm_chain)
+        #train and print the output
+        print network.lstm_chain_parallel_output(x_in, y_out)
+        for i in xrange(500):
+            network.lstm_chain_parallel_output(x_in, y_out)
+            network.print_loss_lstm(x_in, y_out)
+        print network.lstm_chain_parallel_output(x_in, y_out)
         
 class mean_pooling:
     """
@@ -333,18 +351,23 @@ class Albert:
 
 if __name__ == "__main__":
     help = Help()
-    #help.example_neural_network()
+    help.example_neural_network()
+    help.example_lstm_network()
     #create all the inputs
+    """
     x = T.dmatrix("x")
     y = T.dmatrix("y")
     x_in = [[0.1, 0.3], [0.6, 0.6]]
     y_out = [[0.2, 0.5], [0.1, 0.1]]
-
-    network = Neural_network(1.0, 'float64')
+    #create the function
+    network = Neural_network(0.5, 'float64')
     my_lstm_chain = network.lstm_chain(2, len(x_in), 'float64')
-    network.print_function_graph("pydotprint.png", my_lstm_chain)
-    print network.lstm_chain_parallel_output(x_in, y_out)
+    #insert output into neural network dense layer
+    dimensions = [[2, 5], [5, 1]]
+    my_func = function([x, y], network.fully_connected_network(my_lstm_chain, 3, dimensions), updates = network.update_loss(y, "least_squared_loss", "neural_network"))
+    #train the function
     for i in xrange(500):
-        network.lstm_chain_parallel_output(x_in, y_out)
-        network.print_loss_lstm(x_in, y_out)
-    print network.lstm_chain_parallel_output(x_in, y_out)
+        my_func(x_in, y_out)
+        network.print_loss(x, y, x_in, y_out)
+    print my_func(x_in, y_out)
+    """
