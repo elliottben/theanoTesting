@@ -128,7 +128,7 @@ class Cost:
     """
     cost function is composed of the loss function as well as regularization that can be added
     """
-    def __init__(self, loss, w_list, b_list, u_list, h_t_1):
+    def __init__(self, loss, w_list, b_list, u_list, h_t_1, network_components):
         """
         init the cost function with a loss function
         """
@@ -139,11 +139,13 @@ class Cost:
         #the following is for lstm
         self.u_list = u_list
         self.h_t_1 = h_t_1
+        #the structure of the network
+        self.network_components = network_components
 
     def current(self):
         return self.cost
 
-    def update_parameters(self, learning_rate, final_layer):
+    def update_parameters(self, learning_rate):
         """
         update the shared parameters \n
         w = a list of the weights starting from the foremost layers \n
@@ -151,17 +153,17 @@ class Cost:
         learning_rate = the rate at which the program learns (can be function) \n
         """
         updates = collections.OrderedDict()
-        if (final_layer=="neural_network"):
+        if("lstm_chain" in self.network_components):
+            for w_i, b_i, u_i, h_t_1_i in zip(self.w_list, self.b_list, self.u_list, self.h_t_1):
+                gw_i, gu_i, gb_i = T.grad(T.mean(self.loss), [w_i, u_i, b_i])
+                updates[w_i] = (w_i - learning_rate*gw_i)
+                updates[b_i] = (b_i - learning_rate*gb_i)
+                updates[u_i] = (u_i - learning_rate*gu_i)
+        elif ("fully_connected_network" in self.network_components):
             for w_i, b_i in zip(self.w_list, self.b_list):
                 gw_i, gb_i = T.grad(T.mean(self.loss), [w_i, b_i])
                 updates[w_i] = (w_i - learning_rate*gw_i)
                 updates[b_i] = (b_i - learning_rate*gb_i)
-        elif(final_layer=="lstm_chain"):
-            for w_i, b_i, u_i, h_t_1_i in zip(self.w_list, self.b_list, self.u_list, self.h_t_1):
-                gw_i, gu_i, gb_i = T.grad(T.mean(h_t_1_i), [w_i, u_i, b_i])
-                updates[w_i] = (w_i - learning_rate*gw_i)
-                updates[b_i] = (b_i - learning_rate*gb_i)
-                updates[u_i] = (u_i - learning_rate*gu_i)
         return updates
 
 
@@ -190,6 +192,8 @@ class Neural_network:
         self.func_inputs_x = []
         self.func_inputs_y = []
         self.func_inputs_y_compiled = None
+        #function componenets
+        self.network_components = []
         #overall building function
         self.func = T.dmatrix("pre-compiled_function")
         self.func_compiled = None
@@ -208,13 +212,15 @@ class Neural_network:
             print "\nlayer" + str(item) + "\n"
             print item.get_value()
 
-    def fully_connected_network(self, batch_size, dimensions, x=None, activation_type="inverse_tangent_function"):
+    def fully_connected_network(self, batch_size, dimensions, x_input=None, activation_type="inverse_tangent_function"):
 
         #configure the class variables for the neural network
 
+        #add a fully connected output to the layers
+        self.network_components.append("fully_connected_network")
         #create the symbolic x and y
-        x_input = T.dmatrix("x_input")
-        if (x is None):
+        x = T.dmatrix("x_input")
+        if (x_input is not None):
             x = x_input
         y = T.dmatrix("y")
         #define the x and y inputs for theano
@@ -244,14 +250,18 @@ class Neural_network:
             self.func = self.activation.options[activation_type](self.func)
         return self.func
 
-    def lstm_chain(self, vector_dimensions, chain_length, precision):
+    def lstm_chain(self, vector_dimensions, chain_length, precision, x_input=None):
+        #add lstm_chain to the layers
+        self.network_components.append("lstm_chain")
         #create outputs that are the same dimensions as x
         self.vector_dimensions = vector_dimensions
         prev_h = np.zeros([1, self.vector_dimensions])
         prev_C = np.zeros([1, self.vector_dimensions])
         for link in xrange(chain_length):
-            #each neuron gets one input and one output
+            #each neuron gets one input and one output, unless that input is already provided, then use that input
             x = T.dvector("x" + str(link))
+            if (x_input is not None):
+                x = x_input[link]
             #store symbolic variables
             self.func_inputs_x.append(x)
             #each lst neuron has four w, u, b
@@ -270,41 +280,45 @@ class Neural_network:
                 self.b_list.append(link_b[i])
             prev_h, prev_C = self.neuron.lstm(x, prev_h, prev_C, link_w, link_u, link_b, self.vector_dimensions, precision)
             self.h_t_1_list.append(prev_h)
-        #create the output theano variables
+        #create the output theano variables, clear the current list
+        self.func_inputs_y = []
         for link in xrange(chain_length):
             y = T.dvector("y" + str(link))
             self.func_inputs_y.append(y)
+        #create the compiled function inputs
+        self.func_inputs_y_compiled = T.concatenate(self.func_inputs_y, axis=0)
         #return every time step output concatenated
         self.func = T.concatenate(self.h_t_1_list, axis=1)
         return self.func
 
-    def lstm_chain_parallel_output(self, x_in, y_out, loss_type="least_squared_loss"):
-        #input x and y correctly
-        #compile the updates
-        updates = self.update_loss(T.concatenate(self.func_inputs_y, axis=0))
-        lstm_output = function((self.func_inputs_x + self.func_inputs_y), self.func, updates=updates)
-        return lstm_output(*(x_in + y_out))
+    def update_loss(self, type="least_squared_loss"):
+        cost = Cost(self.loss.options[type](self.func_inputs_y_compiled, self.func), self.w_list, self.b_list, self.u_list, self.h_t_1_list, self.network_components)
+        return cost.update_parameters(self.learning_rate)
 
-    def return_compiled_func(self, type="least_squared_loss", final_layer="neural_network"):
-        updates = self.update_loss(self.func_inputs_y_compiled, type, final_layer)
+    def return_compiled_func(self, type="least_squared_loss"):
+        updates = self.update_loss(type)
         self.func_compiled = function((self.func_inputs_x + self.func_inputs_y), self.func, updates=updates)
         return self.func_compiled
 
-
-    def update_loss(self, y, type="least_squared_loss", final_layer="neural_network"):
-        cost = Cost(self.loss.options[type](self.func_inputs_y_compiled, self.func), self.w_list, self.b_list, self.u_list, self.h_t_1_list)
-        return cost.update_parameters(self.learning_rate, final_layer)
-            
-    def print_loss_lstm(self, x_in, y_out, type="least_squared_loss"):
-        loss = function((self.func_inputs_x + self.func_inputs_y), T.mean(self.loss.options[type](T.concatenate(self.func_inputs_y, axis=0), self.func)))
-        print loss(*(x_in + y_out))
-
-    def print_loss(self, x_in, y_in, type="least_squared_loss"):
+    def print_loss(self, inputs, type="least_squared_loss"):
         loss = function((self.func_inputs_x + self.func_inputs_y), T.mean(self.loss.options[type](self.func_inputs_y_compiled, self.func)))
-        print loss(x_in, y_in)
+        print loss(*inputs)
 
     def print_function_graph(self, file, function):
         theano.printing.pydotprint(function, outfile=file, var_with_name_simple=True)
+
+    def print_network_information(self):
+        for layer in self.network_components:
+            print layer
+        print "\n"
+
+    def tensor_split_into(self, x, pieces):
+        split_dim = x.shape[0]/pieces
+        split_distribution = []
+        for piece in xrange(pieces):
+            split_distribution.append(split_dim)
+        return theano.tensor.split(x, split_distribution, pieces, axis=0)
+        
 
 class Help:
     """
@@ -337,7 +351,7 @@ class Help:
         print my_func(x_in, y_out)
         for i in xrange(500):
             my_func(x_in, y_out)
-            network.print_loss(x_in, y_out)
+            network.print_loss([x_in, y_out])
         network.printWeights()
         network.printBiases()
         print "\nresult:\n"
@@ -345,8 +359,6 @@ class Help:
 
     def example_lstm_network(self):
         #first define the variables and the data
-        x = T.dmatrix("x")
-        y = T.dmatrix("y")
         x_in = [[0.1, 0.3], [0.6, 0.6]]
         y_out = [[0.2, 0.5], [0.1, 0.1]]
         #print the network function
@@ -355,11 +367,15 @@ class Help:
         #print the function graph
         network.print_function_graph("pydotprint.png", my_lstm_chain)
         #train and print the output
-        print network.lstm_chain_parallel_output(x_in, y_out)
-        for i in xrange(500):
-            network.lstm_chain_parallel_output(x_in, y_out)
-            network.print_loss_lstm(x_in, y_out)
-        print network.lstm_chain_parallel_output(x_in, y_out)
+        lstm_func = network.return_compiled_func()
+        network.print_network_information()
+        print lstm_func(*(x_in + y_out))
+        for i in xrange(100000):
+            lstm_func(*(x_in + y_out))
+            if (i%5000==0):
+                network.print_loss(x_in + y_out)
+        print lstm_func(*(x_in + y_out))
+        network.print_loss(x_in+y_out)
         
 class mean_pooling:
     """
@@ -374,8 +390,8 @@ class Albert:
 
 if __name__ == "__main__":
     help = Help()
-    help.example_neural_network()
-    #help.example_lstm_network()
+    #help.example_neural_network()
+    help.example_lstm_network()
     #create all the inputs
     """
     x = T.dmatrix("x")

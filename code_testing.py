@@ -63,3 +63,13 @@ updates.update(update_2)
 print update_1
 print update_2
 print updates
+print "\n"
+
+x_1 = T.dmatrix("x_1")
+def f(x):
+    x_v = T.dvector("x_v")
+    x_v = x[0]
+    return x_v
+
+func = function([x_1], f(x_1))
+print func([[ 0.5], [-0.1], [ 0.4]])
