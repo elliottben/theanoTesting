@@ -222,9 +222,10 @@ class Neural_network:
         x = T.dmatrix("x_input")
         if (x_input is not None):
             x = x_input
+        else:
+            self.func_inputs_x.append(x)
         y = T.dmatrix("y")
         #define the x and y inputs for theano
-        self.func_inputs_x.append(x)
         self.func_inputs_y = [y]
         #define the compiled y input for the loss function
         self.func_inputs_y_compiled = y
@@ -313,11 +314,12 @@ class Neural_network:
         print "\n"
 
     def tensor_split_into(self, x, pieces):
-        split_dim = x.shape[0]/pieces
+        axis=1
+        split_dim = x.shape[axis]/pieces
         split_distribution = []
         for piece in xrange(pieces):
             split_distribution.append(split_dim)
-        return theano.tensor.split(x, split_distribution, pieces, axis=0)
+        return theano.tensor.split(x, split_distribution, pieces, axis=axis)
         
 
 class Help:
@@ -376,6 +378,27 @@ class Help:
                 network.print_loss(x_in + y_out)
         print lstm_func(*(x_in + y_out))
         network.print_loss(x_in+y_out)
+
+    def example_nn_to_lstm(self):
+        #first define the variables and the data
+        x_in = [[0.1, 0.3], [0.6, 0.6]]
+        y_out = [[0.2, 0.5, 0.1, 0.1]]
+        dimensions = [[4, 8], [8, 4]]
+        #print the network function
+        network = Neural_network(0.1, 'float64')
+        #add lstm
+        my_lstm_chain = network.lstm_chain(2, len(x_in), 'float64')
+        #add neural network
+        network.fully_connected_network(1, dimensions, my_lstm_chain)
+        #return function
+        my_func = network.return_compiled_func()
+        print my_func(*(x_in + [y_out]))
+        for i in xrange(500):
+            my_func(*(x_in + [y_out]))
+            network.print_loss(x_in + [y_out])
+        print my_func(*(x_in + [y_out]))
+
+        
         
 class mean_pooling:
     """
@@ -391,7 +414,8 @@ class Albert:
 if __name__ == "__main__":
     help = Help()
     #help.example_neural_network()
-    help.example_lstm_network()
+    #help.example_lstm_network()
+    help.example_nn_to_lstm()
     #create all the inputs
     """
     x = T.dmatrix("x")

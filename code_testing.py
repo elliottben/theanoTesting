@@ -47,6 +47,7 @@ result = function([a_theano, b_theano, c_theano], T.concatenate([a_theano, b_the
 my_sequence = [a_real, b_real, c_real]
 print result(*my_sequence)
 result_1 = function([], T.concatenate(my_sequence, axis=1))
+print "result 1"
 print result_1()
 
 input_1 = [9]
@@ -73,3 +74,16 @@ def f(x):
 
 func = function([x_1], f(x_1))
 print func([[ 0.5], [-0.1], [ 0.4]])
+
+def tensor_split_into(x, pieces):
+        axis=0
+        split_dim = x.shape[axis]/pieces
+        split_distribution = []
+        for piece in xrange(pieces):
+            split_distribution.append(split_dim)
+        return theano.tensor.split(x, split_distribution, pieces, axis=axis)
+
+func = function([x], tensor_split_into(x, 4))
+array = np.array([[1, 2, 3, 4]])
+print array[0]
+print func(array[0])
