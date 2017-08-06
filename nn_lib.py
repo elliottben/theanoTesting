@@ -5,13 +5,46 @@ from theano import tensor as T
 from theano import function, scan, shared
 from theano.tensor.shared_randomstreams import RandomStreams
 import collections
+from six.moves import cPickle
+import json
 
+
+
+def loadModel(model_information, saved_weights, weight_names, batch_size, vector_dimensions):
+    network = None
+    #read in the weights and biases first
+    for weights, i in zip(saved_weights, xrange(len(weight_names))):
+        f = open(weights, 'rb')
+        try:
+            while(True):
+                weight_names[i].append(cPickle.load(f))
+        except(EOFError):
+            f.close()
+    #grab the vector dimensions for lstm
+    chain_length = None
+    if (len(weight_names)>2):
+        chain_length = len(weight_names[2])/4
+    #create the model with the weights and biases
+    print chain_length
+    print weight_names
+    with open(model_information) as info:
+        content = info.read()
+        content = json.loads(content)
+        network = Neural_network(content['learning_rate'], content['precision'])
+        component_input = None
+        for component in content['components']:
+            if (component=='fully_connected_network'):
+                component_input, weight_names = network.fully_connected_network(batch_size, content['dimensions'], component_input, "inverse_tangent_function", weight_names)
+            elif(component=='lstm_chain'):
+                component_input, weight_names = network.lstm_chain(vector_dimensions, chain_length, content['precision'], component_input, weight_names)    
+    #return the network
+    return network
 
 class Neuron:
     """
     class to define the neuron being used
     """
-    def linear(self, x, batch_size, dimensions, n, w, b, precision):
+    def linear(self, x, batch_size, dimensions, n, w, b, precision, loaded_weights=None):
         """
         x = the input into the linear function \n
         batch_size = array size of the initial batch of input \n
@@ -29,6 +62,9 @@ class Neuron:
         #multiply all dimensions
         w_np = np.random.uniform(lower, higher, dimensions[n]).astype(precision)
         w.set_value(w_np)
+        #check loaded_weights
+        if (loaded_weights is not None):
+            w.set_value(loaded_weights[0].get_value())
         #first portion of the multiplication
         linear_1 = T.dot(x, w)
         #configuring random biases
@@ -36,10 +72,12 @@ class Neuron:
         map(lambda x:batch_size.append(x), dimensions[n][1:])
         b_np = np.random.uniform(lower, higher, batch_size).astype(precision)
         b.set_value(b_np)
+        if (loaded_weights is not None):
+            b.set_value(loaded_weights[1].get_value())
         linear = linear_1 + b
         return linear
 
-    def lstm(self, x, h_t_1, c_t_1, w, u, b, vector_dimensions, precision):
+    def lstm(self, x, h_t_1, c_t_1, w, u, b, vector_dimensions, precision, loaded_weights=None):
         """
         a unit returning a time step output. The following is an explanation
 
@@ -57,14 +95,23 @@ class Neuron:
         h_t = T.dmatrix("h_t")
         lower = -np.sqrt(1./(vector_dimensions))
         higher = np.sqrt(1./(vector_dimensions))
-        for w_i, u_i, b_i in zip(w, u, b):
-            w_np = np.random.uniform(lower, higher, np.array([vector_dimensions, vector_dimensions])).astype(precision)
-            w_i.set_value(w_np)
-            u_np = np.random.uniform(lower, higher, np.array([vector_dimensions, vector_dimensions])).astype(precision)
-            u_i.set_value(u_np)
-            b_np = np.random.uniform(lower, higher, np.array([1, vector_dimensions])).astype(precision)
-            b_i.set_value(b_np)
-            fioC_t.append(activation.options["logistic_function"](T.dot(x, w_i) + T.dot(h_t_1, u_i) + b_i))
+        #check if weights loaded, act accordingly
+        if (loaded_weights is None):
+            for w_i, u_i, b_i in zip(w, u, b):
+                w_np = np.random.uniform(lower, higher, np.array([vector_dimensions, vector_dimensions])).astype(precision)
+                w_i.set_value(w_np)
+                u_np = np.random.uniform(lower, higher, np.array([vector_dimensions, vector_dimensions])).astype(precision)
+                u_i.set_value(u_np)
+                b_np = np.random.uniform(lower, higher, np.array([1, vector_dimensions])).astype(precision)
+                b_i.set_value(b_np)
+                fioC_t.append(activation.options["logistic_function"](T.dot(x, w_i) + T.dot(h_t_1, u_i) + b_i))
+        else:
+            for w_real, b_real, u_real, w_i, u_i, b_i in zip(loaded_weights[0], loaded_weights[1], loaded_weights[2], w, u, b):
+                w_i.set_value(w_real.get_value())
+                u_i.set_value(u_real.get_value())
+                b_i.set_value(b_real.get_value())
+                fioC_t.append(activation.options["logistic_function"](T.dot(x, w_i) + T.dot(h_t_1, u_i) + b_i))
+
         c_t = fioC_t[0]*c_t_1 + fioC_t[1]*fioC_t[2]
         h_t = fioC_t[3]*c_t
         return h_t, c_t
@@ -197,6 +244,8 @@ class Neural_network:
         #overall building function
         self.func = T.dmatrix("pre-compiled_function")
         self.func_compiled = None
+        #more params for saving the file
+        self.dimensions = None
 
     def printWeights(self):
         print "\nWeights:"
@@ -212,7 +261,26 @@ class Neural_network:
             print "\nlayer" + str(item) + "\n"
             print item.get_value()
 
-    def fully_connected_network(self, batch_size, dimensions, x_input=None, activation_type="inverse_tangent_function"):
+    def saveModel(self, name):
+        #save enough information to reconstruct the network
+        with open((name + '.txt'), 'w+') as saved_json:
+            json_info = {}
+            json_info['precision'] = self.precision
+            json_info['learning_rate'] = self.learning_rate
+            json_info['components'] = self.network_components
+            json_info['dimensions'] = self.dimensions
+            saved_json.write(json.dumps(json_info))
+        #save the weights
+        weights_file = [self.w_list, self.u_list, self.b_list]
+        file_names = ['_w_list', '_u_list', '_b_list']
+        for weights, file_name in zip(weights_file, file_names):
+            f = open((name + file_name + '.save'), 'wb')
+            for weight in weights:
+                cPickle.dump(weight, f, protocol=cPickle.HIGHEST_PROTOCOL)
+            f.close()
+        print "saved the model under " + name
+
+    def fully_connected_network(self, batch_size, dimensions, x_input=None, activation_type="inverse_tangent_function", loaded_weights=None):
 
         #configure the class variables for the neural network
 
@@ -242,16 +310,27 @@ class Neural_network:
             b = theano.shared(np.array([[]]).astype(self.precision), name=b_name)
             self.w_list.append(w)
             self.b_list.append(b)
+            #check to see if weights were loaded
+            weight_and_bias = None
+            if (loaded_weights is not None):
+                weight_and_bias = [loaded_weights[0][layer], loaded_weights[1][layer]]
             #add the neuron to the function
             if (layer==0):
-                self.func = self.neuron.linear(x, [self.batch_size], self.dimensions, layer, w, b, self.precision)
+                self.func = self.neuron.linear(x, [self.batch_size], self.dimensions, layer, w, b, self.precision, weight_and_bias)
             else:
-                self.func = self.neuron.linear(self.func, [self.batch_size], self.dimensions, layer, w, b, self.precision)
+                self.func = self.neuron.linear(self.func, [self.batch_size], self.dimensions, layer, w, b, self.precision, weight_and_bias)
             #add the activation to the function
             self.func = self.activation.options[activation_type](self.func)
+        #if loaded weights, remove that many weights from the list
+        if (loaded_weights is not None):
+            #weights and biases
+            loaded_weights[0] = loaded_weights[0][len(dimensions):]
+            loaded_weights[1] = loaded_weights[1][len(dimensions):]
+        if (loaded_weights is not None):
+            return self.func, loaded_weights
         return self.func
 
-    def lstm_chain(self, vector_dimensions, chain_length, precision, x_input=None):
+    def lstm_chain(self, vector_dimensions, chain_length, precision, x_input=None, loaded_weights=None):
         #add lstm_chain to the layers
         self.network_components.append("lstm_chain")
         #create outputs that are the same dimensions as x
@@ -269,6 +348,7 @@ class Neural_network:
             link_w = []
             link_u = []
             link_b = []
+            weights = [[],[],[]]
             for i in xrange(4):
                 w_name = "w" + str(link) + str(i)
                 u_name = "u" + str(link) + str(i)
@@ -279,8 +359,22 @@ class Neural_network:
                 self.w_list.append(link_w[i])
                 self.u_list.append(link_u[i])
                 self.b_list.append(link_b[i])
-            prev_h, prev_C = self.neuron.lstm(x, prev_h, prev_C, link_w, link_u, link_b, self.vector_dimensions, precision)
+                #check for loaded weights
+                if (loaded_weights is not None):
+                    index = (link*4) + i
+                    weights[0].append(loaded_weights[0][index])
+                    weights[1].append(loaded_weights[1][index])
+                    weights[2].append(loaded_weights[2][index])
+                else:
+                    weights = None
+            prev_h, prev_C = self.neuron.lstm(x, prev_h, prev_C, link_w, link_u, link_b, self.vector_dimensions, precision, weights)
             self.h_t_1_list.append(prev_h)
+        #remove the appropriate weights from the list if loaded
+        if (loaded_weights is not None):
+            cut_index = chain_length*4
+            for i in xrange(len(loaded_weights)):
+                loaded_weights[i] = loaded_weights[i][cut_index:]
+
         #create the output theano variables, clear the current list
         self.func_inputs_y = []
         for link in xrange(chain_length):
@@ -290,6 +384,8 @@ class Neural_network:
         self.func_inputs_y_compiled = T.concatenate(self.func_inputs_y, axis=0)
         #return every time step output concatenated
         self.func = T.concatenate(self.h_t_1_list, axis=1)
+        if (loaded_weights is not None):
+            return self.func, loaded_weights
         return self.func
 
     def update_loss(self, type="least_squared_loss"):
@@ -393,22 +489,11 @@ class Help:
         #return function
         my_func = network.return_compiled_func()
         print my_func(*(x_in + [y_out]))
-        for i in xrange(500):
+        for i in xrange(1):
             my_func(*(x_in + [y_out]))
             network.print_loss(x_in + [y_out])
         print my_func(*(x_in + [y_out]))
-
-        
-        
-class mean_pooling:
-    """
-    Description to be filed
-    """
-
-class Albert:
-    """
-    Albert should be composed of an lstm, mean pooling, and then a neural network
-    """
+        network.saveModel('test')
 
 
 if __name__ == "__main__":
@@ -417,20 +502,13 @@ if __name__ == "__main__":
     #help.example_lstm_network()
     help.example_nn_to_lstm()
     #create all the inputs
-    """
-    x = T.dmatrix("x")
-    y = T.dmatrix("y")
     x_in = [[0.1, 0.3], [0.6, 0.6]]
-    y_out = [[0.2, 0.5], [0.1, 0.1]]
-    #create the function
-    network = Neural_network(0.5, 'float64')
-    my_lstm_chain = network.lstm_chain(2, len(x_in), 'float64')
-    #insert output into neural network dense layer
-    dimensions = [[2, 5], [5, 1]]
-    my_func = function([x, y], network.fully_connected_network(my_lstm_chain, 3, dimensions), updates = network.update_loss(y, "least_squared_loss", "neural_network"))
-    #train the function
-    for i in xrange(500):
-        my_func(x_in, y_out)
-        network.print_loss(x, y, x_in, y_out)
-    print my_func(x_in, y_out)
-    """
+    y_out = [[0.2, 0.5, 0.1, 0.1]]
+    w_list = []
+    b_list = []
+    u_list = []
+    model_information = 'test.txt'
+    weight_files = ['test_w_list.save', 'test_b_list.save', 'test_u_list.save']
+    weight_names = [w_list, b_list, u_list]
+    network = loadModel(model_information, weight_files, weight_names, 1, len(x_in))
+    network.print_loss(x_in + [y_out])
