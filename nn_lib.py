@@ -397,9 +397,15 @@ class Neural_network:
         self.func_compiled = function((self.func_inputs_x + self.func_inputs_y), self.func, updates=updates)
         return self.func_compiled
 
+    def return_func_no_update(self):
+        return function((self.func_inputs_x), self.func)
+
     def print_loss(self, inputs, type="least_squared_loss"):
         loss = function((self.func_inputs_x + self.func_inputs_y), T.mean(self.loss.options[type](self.func_inputs_y_compiled, self.func)))
-        print loss(*inputs)
+        overall_loss = loss(*inputs)
+        print overall_loss
+        return overall_loss
+
 
     def print_function_graph(self, file, function):
         theano.printing.pydotprint(function, outfile=file, var_with_name_simple=True)
@@ -477,9 +483,9 @@ class Help:
 
     def example_nn_to_lstm(self):
         #first define the variables and the data
-        x_in = [[0.1, 0.3], [0.6, 0.6]]
-        y_out = [[0.2, 0.5, 0.1, 0.1]]
-        dimensions = [[4, 8], [8, 4]]
+        x_in = [[0.1, 0.3], [0.6, 0.6], [0.5, 0.5]]
+        y_out = [[0.2, 0.5, 0.1, 0.1, 0.5, 0.5]]
+        dimensions = [[6, 8], [8, 6]]
         #print the network function
         network = Neural_network(0.1, 'float64')
         #add lstm
@@ -500,8 +506,9 @@ if __name__ == "__main__":
     help = Help()
     #help.example_neural_network()
     #help.example_lstm_network()
-    help.example_nn_to_lstm()
+    #help.example_nn_to_lstm()
     #create all the inputs
+    """
     x_in = [[0.1, 0.3], [0.6, 0.6]]
     y_out = [[0.2, 0.5, 0.1, 0.1]]
     w_list = []
@@ -512,3 +519,4 @@ if __name__ == "__main__":
     weight_names = [w_list, b_list, u_list]
     network = loadModel(model_information, weight_files, weight_names, 1, len(x_in))
     network.print_loss(x_in + [y_out])
+    """
