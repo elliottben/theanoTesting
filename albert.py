@@ -241,8 +241,6 @@ if __name__ == "__main__":
     with open('loss_pattern.txt', 'w+') as loss_file:
         for i in xrange(epochs):
             for sample_x, sample_y in zip(x_in, y_out):
-                print sample_x.shape
-                print sample_y.shape
                 print "my_func executing"
                 my_func(*(sample_x + [sample_y]))
                 print "loss file writing"
