@@ -8,6 +8,7 @@ import numpy as np
 import nn_lib
 from scipy import spatial
 import math
+import sklearn.decomposition as decomp
 
 class Albert:
 
@@ -135,12 +136,14 @@ class Albert:
         with open(my_file) as word_map:
             return json.loads(word_map.readlines()[0])
 
-    def encode_x_y(self, word_map_file, train_data_file):
+    def encode_x_y(self, word_map_file, train_data_file, vector_length, lstm_chain_length):
         q_a_list = self.readInMyFile(train_data_file)
         self.word_map = self.getWordMap(word_map_file)
         #list of q a vector sentence pairs
         q_number = []
         a_number = []
+        #get the pca transformation
+        pca = decomp.PCA(n_components=vector_length)
         for pair in q_a_list:
             q_sentence = []
             a_sentence = []
@@ -149,10 +152,16 @@ class Albert:
             for a_word in pair[1]:
                 a_sentence.append(self.word_map[unicode(a_word.lower(), errors='ignore')])
             # if q_number and a_number are not 40 long then append zeros
-            while len(q_sentence) < 38:
+            while len(q_sentence) < lstm_chain_length:
                 q_sentence.append(np.zeros(300).tolist())
-            while len(a_sentence) < 38:
+            while len(a_sentence) < lstm_chain_length:
                 a_sentence.append(np.zeros(300).tolist())
+            #transform the dimensions with pca
+            pca.fit(q_sentence)
+            q_sentence = pca.transform(q_sentence)
+            pca.fit(a_sentence)
+            a_sentence = pca.transform(a_sentence)
+            #now add the new sentences to q and a
             q_number.append(q_sentence)
             a_number.append(a_sentence)
         q_number = np.array(q_number)
@@ -220,17 +229,23 @@ class Albert:
 
 
 if __name__ == "__main__":
+
+    lstm_chain_length = 38
+    vector_length = 38
+    dim_s_e = (vector_length*lstm_chain_length)
+
     albert = Albert()
     albert.get_max_length('training_data.csv')
-    x_in, y_out = albert.encode_x_y('my_json_wordMap.txt', 'training_data.csv')
+    x_in, y_out = albert.encode_x_y('my_json_wordMap.txt', 'training_data.csv', vector_length, lstm_chain_length)
+    
     #build the model
-    dimensions = [[11400, 11400]]
+    dimensions = [[dim_s_e, dim_s_e]]
     #print the network function
     print "compile network"
     network = nn_lib.Neural_network(0.1, 'float64')
     #add lstm
     print "compile lstm chain"
-    my_lstm_chain = network.lstm_chain(300, 38, 'float64')
+    my_lstm_chain = network.lstm_chain(vector_length, lstm_chain_length, 'float64')
     #add neural network
     print "compile nn"
     network.fully_connected_network(1, dimensions, my_lstm_chain)
@@ -242,8 +257,8 @@ if __name__ == "__main__":
         for i in xrange(epochs):
             for sample_x, sample_y in zip(x_in, y_out):
                 print "my_func executing"
-                my_func(*(sample_x + [sample_y]))
+                my_func(*(sample_x + [[sample_y]]))
                 print "loss file writing"
-                loss_file.write(network.print_loss(sample_x + [sample_y]))
+                loss_file.write(network.print_loss(sample_x + [[sample_y]]))
             network.saveModel('modeltrain' + i)
             loss_file.write("saving model at loss above")

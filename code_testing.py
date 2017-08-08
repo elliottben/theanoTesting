@@ -3,6 +3,8 @@ import theano
 from theano import tensor as T, function, shared, scan
 import numpy as np
 import collections
+import sklearn
+import sklearn.decomposition as decomp
 
 x = T.dmatrix('x')
 func = function([x], x.sum()/(x.flatten().shape[0]))
@@ -86,4 +88,16 @@ def tensor_split_into(x, pieces):
 func = function([x], tensor_split_into(x, 4))
 array = np.array([[1, 2, 3, 4]])
 print array[0]
-print func(array[0])
+
+
+value = 3
+print "EXPERIMENT"
+print value
+a = [[3, 4, 5, 8], [1, 2, 5, 3]]
+print np.array(a).shape
+my_pca = decomp.PCA(n_components=value)
+my_pca.fit(a)
+
+a_new = my_pca.transform(a)
+print np.array(a_new).shape
+print a_new
