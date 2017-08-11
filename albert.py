@@ -142,8 +142,6 @@ class Albert:
         #list of q a vector sentence pairs
         q_number = []
         a_number = []
-        #get the pca transformation
-        pca = decomp.PCA(n_components=vector_length)
         for pair in q_a_list:
             q_sentence = []
             a_sentence = []
@@ -153,19 +151,16 @@ class Albert:
                 a_sentence.append(self.word_map[unicode(a_word.lower(), errors='ignore')])
             # if q_number and a_number are not 40 long then append zeros
             while len(q_sentence) < lstm_chain_length:
-                q_sentence.append(np.zeros(300).tolist())
+                q_sentence.append(np.zeros(vector_length).tolist())
             while len(a_sentence) < lstm_chain_length:
-                a_sentence.append(np.zeros(300).tolist())
-            #transform the dimensions with pca
-            pca.fit(q_sentence)
-            q_sentence = pca.transform(q_sentence)
-            pca.fit(a_sentence)
-            a_sentence = pca.transform(a_sentence)
+                a_sentence.append(np.zeros(vector_length).tolist())
             #now add the new sentences to q and a
             q_number.append(q_sentence)
             a_number.append(a_sentence)
         q_number = np.array(q_number)
         a_number = np.array(a_number)
+        print q_number.shape
+        print a_number.shape
         a_number = a_number.reshape(a_number.shape[0], a_number.shape[1]*a_number.shape[2])
         print q_number.shape
         print a_number.shape
@@ -226,6 +221,21 @@ class Albert:
         for i in range(0, len(l), n):
             yield l[i:i + n]
 
+    def pca_wordMap(self, word_map_file, word_map_file_output, vector_length):
+        word_map = self.getWordMap(word_map_file)
+        word_map_new = {}
+        dataset_collection = []
+        for value in word_map.itervalues():
+            dataset_collection.append(value)
+        pca = decomp.PCA(n_components=vector_length)
+        pca.fit(dataset_collection)
+        for key in word_map.iterkeys():
+            word_map_new[key] = pca.transform(word_map[key]).tolist()
+        with open(word_map_file_output, 'w+')as output:
+            output.write(json.dumps(word_map_new))
+        return
+
+
 
 
 if __name__ == "__main__":
@@ -235,8 +245,9 @@ if __name__ == "__main__":
     dim_s_e = (vector_length*lstm_chain_length)
 
     albert = Albert()
+    #albert.pca_wordMap('my_json_wordMap.txt', 'my_json_wordMap_reduction.txt', vector_length)
     albert.get_max_length('training_data.csv')
-    x_in, y_out = albert.encode_x_y('my_json_wordMap.txt', 'training_data.csv', vector_length, lstm_chain_length)
+    x_in, y_out = albert.encode_x_y('my_json_wordMap_reduction.txt', 'training_data.csv', vector_length, lstm_chain_length)
     
     #build the model
     dimensions = [[dim_s_e, dim_s_e]]
