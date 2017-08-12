@@ -159,8 +159,6 @@ class Albert:
             a_number.append(a_sentence)
         q_number = np.array(q_number)
         a_number = np.array(a_number)
-        print q_number.shape
-        print a_number.shape
         a_number = a_number.reshape(a_number.shape[0], a_number.shape[1]*a_number.shape[2])
         print q_number.shape
         print a_number.shape
@@ -230,7 +228,7 @@ class Albert:
         pca = decomp.PCA(n_components=vector_length)
         pca.fit(dataset_collection)
         for key in word_map.iterkeys():
-            word_map_new[key] = pca.transform(word_map[key]).tolist()
+            word_map_new[key] = pca.transform(word_map[key]).tolist()[0]
         with open(word_map_file_output, 'w+')as output:
             output.write(json.dumps(word_map_new))
         return
