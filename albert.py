@@ -269,5 +269,5 @@ if __name__ == "__main__":
                 my_func(*(sample_x + [[sample_y]]))
                 print "loss file writing"
                 loss_file.write(network.print_loss(sample_x + [[sample_y]]))
-            network.saveModel('modeltrain' + i)
+            network.saveModel('modeltrain' + str(i))
             loss_file.write("saving model at loss above")
