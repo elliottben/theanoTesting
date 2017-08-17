@@ -239,7 +239,7 @@ class Albert:
 
 if __name__ == "__main__":
     try:
-        mailMe.sendEmail("albert training starting with learning rate " + str(0.1))
+        mailMe.sendEmail("albert training starting with learning rate " + str(1.0))
         lstm_chain_length = 38
         vector_length = 38
         dim_s_e = (vector_length*lstm_chain_length)
@@ -253,7 +253,7 @@ if __name__ == "__main__":
         dimensions = [[dim_s_e, dim_s_e]]
         #print the network function
         print "compile network"
-        network = nn_lib.Neural_network(0.1, 'float64')
+        network = nn_lib.Neural_network(1.0, 'float64')
         #add lstm
         print "compile lstm chain"
         my_lstm_chain = network.lstm_chain(vector_length, lstm_chain_length, 'float64')
@@ -270,9 +270,11 @@ if __name__ == "__main__":
                     print "my_func executing"
                     my_func(*(sample_x + [[sample_y]]))
                     print "loss file writing"
-                    loss_file.write(network.print_loss(sample_x + [[sample_y]]))
+                    loss_value = network.print_loss(sample_x + [[sample_y]])
+                    print loss_value
+                    loss_file.write(loss_value)
                 network.saveModel('modeltrain' + str(i))
-                mailMe.sendEmail("The latest model has been saved at epoch " + str(i))
+                mailMe.sendEmail("The latest model has been saved at epoch " + str(i) + " and loss of " + str(loss_value) + " at lr of 1.0")
                 loss_file.write("saving model at loss above")
     except (Exception):
         mailMe.sendEmail("albert err out :/")
