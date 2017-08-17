@@ -9,6 +9,7 @@ import nn_lib
 from scipy import spatial
 import math
 import sklearn.decomposition as decomp
+import mailMe
 
 class Albert:
 
@@ -237,37 +238,41 @@ class Albert:
 
 
 if __name__ == "__main__":
+    try:
+        mailMe.sendEmail("albert training starting with learning rate " + str(0.1))
+        lstm_chain_length = 38
+        vector_length = 38
+        dim_s_e = (vector_length*lstm_chain_length)
 
-    lstm_chain_length = 38
-    vector_length = 38
-    dim_s_e = (vector_length*lstm_chain_length)
-
-    albert = Albert()
-    #albert.pca_wordMap('my_json_wordMap.txt', 'my_json_wordMap_reduction.txt', vector_length)
-    albert.get_max_length('training_data.csv')
-    x_in, y_out = albert.encode_x_y('my_json_wordMap_reduction.txt', 'training_data.csv', vector_length, lstm_chain_length)
-    
-    #build the model
-    dimensions = [[dim_s_e, dim_s_e]]
-    #print the network function
-    print "compile network"
-    network = nn_lib.Neural_network(0.1, 'float64')
-    #add lstm
-    print "compile lstm chain"
-    my_lstm_chain = network.lstm_chain(vector_length, lstm_chain_length, 'float64')
-    #add neural network
-    print "compile nn"
-    network.fully_connected_network(1, dimensions, my_lstm_chain)
-    #return function
-    print "compile whole func"
-    my_func = network.return_compiled_func()
-    epochs = 100
-    with open('loss_pattern.txt', 'w+') as loss_file:
-        for i in xrange(epochs):
-            for sample_x, sample_y in zip(x_in, y_out):
-                print "my_func executing"
-                my_func(*(sample_x + [[sample_y]]))
-                print "loss file writing"
-                loss_file.write(network.print_loss(sample_x + [[sample_y]]))
-            network.saveModel('modeltrain' + str(i))
-            loss_file.write("saving model at loss above")
+        albert = Albert()
+        #albert.pca_wordMap('my_json_wordMap.txt', 'my_json_wordMap_reduction.txt', vector_length)
+        albert.get_max_length('training_data.csv')
+        x_in, y_out = albert.encode_x_y('my_json_wordMap_reduction.txt', 'training_data.csv', vector_length, lstm_chain_length)
+        
+        #build the model
+        dimensions = [[dim_s_e, dim_s_e]]
+        #print the network function
+        print "compile network"
+        network = nn_lib.Neural_network(0.1, 'float64')
+        #add lstm
+        print "compile lstm chain"
+        my_lstm_chain = network.lstm_chain(vector_length, lstm_chain_length, 'float64')
+        #add neural network
+        print "compile nn"
+        network.fully_connected_network(1, dimensions, my_lstm_chain)
+        #return function
+        print "compile whole func"
+        my_func = network.return_compiled_func()
+        epochs = 100
+        with open('loss_pattern.txt', 'w+') as loss_file:
+            for i in xrange(epochs):
+                for sample_x, sample_y in zip(x_in, y_out):
+                    print "my_func executing"
+                    my_func(*(sample_x + [[sample_y]]))
+                    print "loss file writing"
+                    loss_file.write(network.print_loss(sample_x + [[sample_y]]))
+                network.saveModel('modeltrain' + str(i))
+                mailMe.sendEmail("The latest model has been saved at epoch " + str(i))
+                loss_file.write("saving model at loss above")
+    except (Exception):
+        mailMe.sendEmail("albert err out :/")
