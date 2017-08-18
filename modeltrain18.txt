@@ -1,1 +1,0 @@
-{"learning_rate": 1.0, "precision": "float64", "components": ["lstm_chain", "fully_connected_network"], "dimensions": [[1444, 1444]]}
