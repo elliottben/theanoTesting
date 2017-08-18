@@ -282,7 +282,7 @@ if __name__ == "__main__":
         x_in, y_out = albert.encode_x_y('my_json_wordMap_reduction.txt', 'training_data.csv', vector_length, lstm_chain_length)
         
         #build the model
-        dimensions = [[dim_s_e, 38],[38, 38], [38, 38], [38, 38], [38, dim_s_e]]
+        dimensions = [[dim_s_e, 38],[38, 38], [38, 38], [38, dim_s_e]]
         #print the network function
         print "compile network"
         network = nn_lib.Neural_network(1.0, 'float64')
