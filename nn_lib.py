@@ -17,6 +17,7 @@ def loadModel(model_information, saved_weights, weight_names, batch_size, vector
         f = open(weights, 'rb')
         try:
             while(True):
+                print 'unpickle'
                 weight_names[i].append(cPickle.load(f))
         except(EOFError):
             f.close()
