@@ -10,6 +10,7 @@ from scipy import spatial
 import math
 import sklearn.decomposition as decomp
 import mailMe
+import theano
 
 class Albert:
 
@@ -79,12 +80,13 @@ class Albert:
                 #replace string with float
                 rep_vector = [float(value) for value in rep_vector]
                 json_map[unicode(word_w_vec, errors='ignore')] = rep_vector
-        with open('googleCommon.txt') as googleCommon:
+        with open('googleCommon.txt', 'w+') as googleCommon:
             googleCommon.write(json.dumps(json_map))
+        self.pca_wordMap("googleCommon.txt", "googleCommon_reduced.txt", 38)
         print "completed generating the common words"
 
     def obtainCommonWords(self):
-        with open('googleCommon.txt') as googleCommon:
+        with open('googleCommon_reduced.txt') as googleCommon:
             self.common_words = json.loads(googleCommon.readlines()[0])
 
     def generateWordMap(self, my_file):
@@ -177,48 +179,55 @@ class Albert:
         print max_len
         return
 
-    def getOutput(self, outputFunction, user_input):
-        #need to convert user input into word vector, get most commonly used words from dictionary
-        user_input = user_input.split(' ')
-        user_input_split = []
-        for user_word in user_input:
-            min_cos_dist = 2.0*math.pi
-            key_word = None
-            for w_common, w_map in zip(self.common_words, self.word_map):
-                #convert to unicode
-                w_common = unicode(w_common, errors='ignore')
-                w_map = unicode(w_map, errors = 'ignore')
-                #find best word match
-                dist = 1 - spatial.distance.cosine(w_common, user_word)
-                if(dist<min_cos_dist):
-                    min_cos_dist = dist
-                    key_word = self.common_words[w_common]
-                dist = 1 - spatial.distance.cosine(w_map, user_word)
-                if (dist<min_cos_dist):
-                    min_cos_dist = dist
-                    key_word = self.common_words[w_map]
-            #a 'good' word has to be found, so just append the key word
-            user_input_split.append(key_word)
-        #input is all ready for the function
-        vectorOutput = outputFunction(user_input_split)
-        outputSentence = []
+    def getOutput(self, output):
         min_cosine_dist = 2.0*math.pi
-        word_key = None
-        #for every 300, get word and append to sentence
-        splitOutput = self.chunks(vectorOutput, 300)
+        outputSentence = []
+        outputString = ""
+        #split the output in form [[val val val val]] to [[val], [val], [val], [val]]
+        splitOutput = list(self.chunks(output[0], 38))
         for word in splitOutput:
             #look for closest word in word map
-            for key in self.word_map:
+            word_key = None
+            for key in self.word_map.iterkeys():
                 dist = 1 - spatial.distance.cosine(word, self.word_map[key])
                 if (dist<min_cosine_dist):
                     min_cosine_dist = dist
-                    word_key = word
-            outputSentence.append(word)
-        print outputSentence
+                    word_key = key
+            outputSentence.append(word_key)
+        for word in outputSentence:
+            if word is not None:
+                outputString = outputString + " " + word
+        print outputString
+
+    def transform_input(self, user_input, word_map_file):
+        #get the word map
+        self.word_map = self.getWordMap(word_map_file)
+        #get the common words
+        self.obtainCommonWords()
+        #split the input
+        user_input = user_input.split(' ')
+        #declare empty x_in
+        x_in = []
+        for word in user_input:
+            if word in self.word_map:
+                x_in.append(self.word_map[word])
+            elif word in self.common_words:
+                x_in.append(self.common_words[word])
+            else:
+                #then replace the word with a random 38 long word vector
+                rand_word = np.random.uniform(0.0, 1.0, np.array([1, 38])).tolist()[0]
+                x_in.append(rand_word)
+        #make the sentence 38 "words" long
+        if (len(x_in)>38):
+            x_in = x_in[:38]
+        while len(x_in) is not 38:
+            x_in.append(np.zeros(38).tolist())
+        return x_in
+            
 
     def chunks(self, l, n):
-        for i in range(0, len(l), n):
-            yield l[i:i + n]
+        n = max(1, n)
+        return (l[i:i+n] for i in xrange(0, len(l), n))
 
     def pca_wordMap(self, word_map_file, word_map_file_output, vector_length):
         word_map = self.getWordMap(word_map_file)
@@ -234,7 +243,30 @@ class Albert:
             output.write(json.dumps(word_map_new))
         return
 
-
+def albertAttemptOne():
+    #python for post training
+    albert = Albert()
+    reply = None
+    user_input = None
+    w_list = []
+    b_list = []
+    u_list = []
+    model_information = "modeltrain0.txt"
+    weight_files = ['modeltrain9_w_list.save', 'modeltrain9_b_list.save', 'modeltrain9_u_list.save']
+    weight_names = [w_list, b_list, u_list]
+    network = nn_lib.loadModel(model_information, weight_files, weight_names, 1, 38)
+    print "loading the bot function created..."
+    my_func = network.use_function()
+    while(True):
+        #get the input
+        if reply is None:
+            user_input = raw_input("HiIiYa I'm a CrAZY BotT:\n\n")
+        else:
+            user_input = raw_input(reply + "\n\n")
+        #get the x_in
+        x_in = albert.transform_input(user_input, 'my_json_wordMap_reduction.txt')
+        output = my_func(*x_in)
+        reply = albert.getOutput(output)
 
 
 if __name__ == "__main__":
@@ -250,7 +282,7 @@ if __name__ == "__main__":
         x_in, y_out = albert.encode_x_y('my_json_wordMap_reduction.txt', 'training_data.csv', vector_length, lstm_chain_length)
         
         #build the model
-        dimensions = [[dim_s_e, dim_s_e]]
+        dimensions = [[dim_s_e, 38],[38, 38], [38, 38], [38, 38], [38, dim_s_e]]
         #print the network function
         print "compile network"
         network = nn_lib.Neural_network(1.0, 'float64')
@@ -271,8 +303,7 @@ if __name__ == "__main__":
                     my_func(*(sample_x + [[sample_y]]))
                     print "loss file writing"
                     loss_value = network.print_loss(sample_x + [[sample_y]])
-                    print loss_value
-                    loss_file.write(loss_value)
+                    loss_file.write(str(loss_value))
                 network.saveModel('modeltrain' + str(i))
                 mailMe.sendEmail("The latest model has been saved at epoch " + str(i) + " and loss of " + str(loss_value) + " at lr of 1.0")
                 loss_file.write("saving model at loss above")
