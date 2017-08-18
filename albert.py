@@ -256,8 +256,13 @@ if __name__ == "__main__":
     albert = Albert()
     reply = None
     user_input = None
-    model_information = None
-    network = nn_lib.loadModel()
+    w_list = []
+    b_list = []
+    u_list = []
+    model_information = "modeltrain0.txt"
+    weight_files = ['modeltrain0_w_list.save', 'modeltrain0_b_list.save', 'modeltrain0_u_list.save']
+    weight_names = [w_list, b_list, u_list]
+    network = nn_lib.loadModel(model_information, weight_files, weight_names, 1, 2)
     while(True):
         #get the input
         if reply is None:
