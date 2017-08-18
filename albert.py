@@ -216,6 +216,20 @@ class Albert:
             outputSentence.append(word)
         print outputSentence
 
+    def transform_input(self, user_input, word_map_file):
+        self.word_map = self.getWordMap(word_map_file)
+        user_input = user_input.split(' ')
+        print user_input
+        x_in = []
+        for word in user_input:
+            if word not in self.word_map:
+                #then replace the word with a random 38 long word vector
+                x_in.append(np.random.uniform(0.0, 1.0, np.array([1, 38])).tolist())
+            else:
+                x_in.append(self.word_map[word])
+        return x_in
+            
+
     def chunks(self, l, n):
         for i in range(0, len(l), n):
             yield l[i:i + n]
@@ -238,6 +252,25 @@ class Albert:
 
 
 if __name__ == "__main__":
+    #python for post training
+    albert = Albert()
+    reply = None
+    user_input = None
+    model_information = None
+    network = nn_lib.loadModel()
+    while(True):
+        #get the input
+        if reply is None:
+            user_input = raw_input("HiIiYa I'm a CrAZY BotT:\n")
+        else:
+            user_input = raw_input(reply + "\n")
+        #get the x_in
+        x_in = albert.transform_input(user_input, 'my_json_wordMap_reduction.txt')
+        
+
+
+        
+    """
     try:
         mailMe.sendEmail("albert training starting with learning rate " + str(1.0))
         lstm_chain_length = 38
@@ -278,3 +311,4 @@ if __name__ == "__main__":
                 loss_file.write("saving model at loss above")
     except (Exception):
         mailMe.sendEmail("albert err out :/")
+    """
