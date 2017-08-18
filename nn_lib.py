@@ -6,6 +6,7 @@ from theano import function, scan, shared
 from theano.tensor.shared_randomstreams import RandomStreams
 import collections
 from six.moves import cPickle
+import pickle
 import json
 
 
@@ -17,7 +18,7 @@ def loadModel(model_information, saved_weights, weight_names, batch_size, vector
         f = open(weights, 'rb')
         try:
             while(True):
-                weight_names[i].append(cPickle.load(f))
+                weight_names[i].append(pickle.load(f))
         except(EOFError):
             f.close()
     #grab the vector dimensions for lstm
