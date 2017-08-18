@@ -423,6 +423,9 @@ class Neural_network:
         for piece in xrange(pieces):
             split_distribution.append(split_dim)
         return theano.tensor.split(x, split_distribution, pieces, axis=axis)
+
+    def use_function(self):
+        return function((self.func_inputs_x), self.func)
         
 
 class Help:
