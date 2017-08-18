@@ -270,7 +270,6 @@ def albertAttemptOne():
 
 
 if __name__ == "__main__":
-    albertAttemptOne()
     try:
         mailMe.sendEmail("albert training starting with learning rate " + str(1.0))
         lstm_chain_length = 38
